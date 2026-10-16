@@ -1,36 +1,118 @@
 #!/bin/bash
-# flashes recovery.iso from WSL onto a USB stick attached to the host.
+# flashes recovery.iso onto a USB stick.
 #
-# steps:
-#   1) enumerate all disks with BusType=USB via Windows PowerShell
-#   2) show a numbered list to pick from
-#   3) write the ISO via elevated PowerShell to \\.\PhysicalDriveN (triggers UAC)
+# runs in two modes:
+#   - WSL: finds USB disks via Windows PowerShell and writes to \\.\PhysicalDriveN
+#          through an elevated PowerShell window (UAC prompt).
+#   - native Linux: finds USB disks via lsblk and writes via dd. sudo is used
+#          for the write (and for umount of any mounted partitions on the stick).
 #
 # usage:
-#   ./flash-stick.sh                      # uses ./recovery.iso
+#   ./flash-stick.sh                      # uses ./recovery.iso or /home/<you>/recovery.iso
 #   ./flash-stick.sh /path/to/image.iso   # custom source
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
-# build.sh writes the ISO to /home/simon/recovery.iso by default (see OUT=).
-# fallback: project directory.
+
+# locate the ISO (build.sh writes it to /home/<you>/recovery.iso by default)
 if [ -n "${1:-}" ]; then
     ISO="$1"
-elif [ -f "/home/simon/recovery.iso" ]; then
-    ISO="/home/simon/recovery.iso"
+elif [ -f "$HOME/recovery.iso" ]; then
+    ISO="$HOME/recovery.iso"
 elif [ -f "$HERE/recovery.iso" ]; then
     ISO="$HERE/recovery.iso"
 else
-    echo "recovery.iso not found in /home/simon/ or $HERE."
-    echo "Run './rebuild.sh' first or pass a path as argument."
+    echo "recovery.iso not found in \$HOME or $HERE."
+    echo "Run './build.sh' first or pass a path as argument."
     exit 1
 fi
 [ -f "$ISO" ] || { echo "ISO not found: $ISO"; exit 1; }
 echo ">> ISO: $ISO ($(du -h "$ISO" | cut -f1))"
 
+# detect WSL by checking for the Windows PowerShell under /mnt/c
 PS="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
-[ -x "$PS" ] || { echo "powershell.exe not found: $PS"; exit 1; }
+if [ -x "$PS" ] && grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+    MODE="wsl"
+else
+    MODE="linux"
+fi
+echo ">> mode: $MODE"
 
-echo ">> detecting USB disks..."
+# =============================================================================
+# linux mode: lsblk + dd
+# =============================================================================
+if [ "$MODE" = "linux" ]; then
+    command -v lsblk >/dev/null 2>&1 || { echo "lsblk not found (util-linux)"; exit 1; }
+    command -v dd    >/dev/null 2>&1 || { echo "dd not found (coreutils)";   exit 1; }
+
+    echo ">> detecting USB disks..."
+    # lsblk reports TRAN=usb for USB-attached block devices
+    LINES="$(lsblk -d -n -b -o NAME,SIZE,MODEL,TRAN 2>/dev/null | awk '$NF=="usb"')"
+
+    if [ -z "${LINES// /}" ]; then
+        echo "No USB disks detected. (stick plugged in?)"
+        exit 1
+    fi
+
+    echo
+    echo "Available USB disks:"
+    printf "   %-3s %-10s %10s  %s\n" "#" "Device" "GB" "Model"
+    printf "   %-3s %-10s %10s  %s\n" "---" "----------" "----------" "------"
+    declare -a DEVS SIZES MODELS
+    IDX=0
+    while read -r NAME SIZE_BYTES REST; do
+        [ -z "$NAME" ] && continue
+        # the TRAN field is the last token; the model is everything in between
+        TRAN="$(echo "$REST" | awk '{print $NF}')"
+        MODEL="$(echo "$REST" | awk '{$NF=""; sub(/[ \t]+$/,""); print}')"
+        [ "$TRAN" = "usb" ] || continue
+        IDX=$((IDX+1))
+        DEVS[$IDX]="/dev/$NAME"
+        SIZES[$IDX]="$(awk -v b="$SIZE_BYTES" 'BEGIN{printf "%.2f", b/1024/1024/1024}')"
+        MODELS[$IDX]="${MODEL:-unknown}"
+        printf "   %-3s %-10s %10s  %s\n" "$IDX" "/dev/$NAME" "${SIZES[$IDX]}" "${MODELS[$IDX]}"
+    done <<< "$LINES"
+
+    if [ "$IDX" -eq 0 ]; then
+        echo "No USB disks detected."
+        exit 1
+    fi
+
+    echo
+    read -rp "Pick (1-$IDX) or empty to cancel: " SEL
+    [ -z "${SEL:-}" ] && { echo "cancelled."; exit 0; }
+    if ! [[ "$SEL" =~ ^[0-9]+$ ]] || [ "$SEL" -lt 1 ] || [ "$SEL" -gt "$IDX" ]; then
+        echo "invalid pick: $SEL"; exit 1
+    fi
+    DEV="${DEVS[$SEL]}"
+    SIZE="${SIZES[$SEL]}"
+    MODEL="${MODELS[$SEL]}"
+
+    echo
+    echo "About to write '$ISO' to $DEV ($MODEL, ~${SIZE} GB)."
+    echo "All data on $DEV will be destroyed."
+    read -rp "Type FLASH to confirm: " CONFIRM
+    [ "$CONFIRM" = "FLASH" ] || { echo "cancelled."; exit 0; }
+
+    # unmount any mounted partitions on the device first
+    for part in "${DEV}"[0-9]* "${DEV}p"[0-9]*; do
+        [ -b "$part" ] || continue
+        if mount | grep -q "^$part "; then
+            echo ">> unmounting $part"
+            sudo umount "$part" || true
+        fi
+    done
+
+    echo ">> writing (sudo dd), this takes a few minutes..."
+    sudo dd if="$ISO" of="$DEV" bs=4M status=progress conv=fsync
+    sync
+    echo ">> flash-stick done. you can unplug $DEV."
+    exit 0
+fi
+
+# =============================================================================
+# WSL mode: PowerShell on the Windows host
+# =============================================================================
+echo ">> detecting USB disks via Windows PowerShell..."
 LIST="$("$PS" -NoProfile -Command "
     Get-Disk |
       Where-Object { \$_.BusType -eq 'USB' } |

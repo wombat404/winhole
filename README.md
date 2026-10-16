@@ -71,60 +71,93 @@ The build is a Linux build. On Windows you need WSL (there is no native
 Windows path). The `flash-stick.sh` script talks to the host's PowerShell
 from inside WSL, so WSL is also the natural place to run it from.
 
-### On Linux (native)
+### On Linux
 
-Tested on Debian 13 under WSL2. On a native Linux machine the same packages
-apply.
+Everything (the ISO, the initramfs, and the Windows WinForms tool) builds
+from Linux. The .NET project targets `net10.0-windows`, which the .NET SDK
+cross-publishes for `win-x64` from Linux. No Windows machine is involved.
+
+Steps tested on Debian 13. On other distros the package names may differ,
+but the set is the same.
+
+**1. Install the build toolchain.**
 
 ```bash
+sudo apt update
 sudo apt install -y busybox-static gcc cpio zstd xz-utils grub-pc-bin \
                     grub-efi-amd64-bin xorriso mtools ntfs-3g python3-pil \
-                    sfdisk qemu-system-x86 fuse3
+                    sfdisk qemu-system-x86 fuse3 git curl wget
 ```
 
 You also need a Linux kernel installed whose modules live under
-`/lib/modules/<version>/`. The build picks the first one it finds that is not
-flagged `microsoft`.
+`/lib/modules/<version>/`. On Debian/Ubuntu that is `linux-image-amd64` (or
+whichever kernel package your distro uses). The build picks the first module
+set it finds under `/lib/modules/` that is not flagged `microsoft`.
 
-Build the ISO:
+**2. Install the .NET 10 SDK.**
+
+Via Microsoft's APT feed:
 
 ```bash
-./build.sh --no-exe       # if you do not have .NET and already have the EXE
-./build.sh                # full build, also publishes PasswordRecovery.exe
+wget -q https://packages.microsoft.com/config/debian/13/packages-microsoft-prod.deb -O /tmp/pmp.deb
+sudo dpkg -i /tmp/pmp.deb && rm /tmp/pmp.deb
+sudo apt update
+sudo apt install -y dotnet-sdk-10.0
 ```
 
-The ISO lands at `/home/<you>/recovery.iso`.
+If `dotnet-sdk-10.0` is not in your distro's feed yet, use the official
+install script:
 
-For the `.NET` publish step `build.sh` calls Windows' `dotnet.exe` via
-`/mnt/c/...`. That path only exists under WSL. On a native Linux box, pass
-`--no-exe` and either build `assets/bin/PasswordRecovery.exe` yourself or
-drop in a pre-built one.
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0
+echo 'export PATH="$HOME/.dotnet:$PATH"' >> ~/.bashrc
+export PATH="$HOME/.dotnet:$PATH"
+```
+
+Verify with `dotnet --list-sdks`. Any `10.0.x` works.
+
+**3. Clone and build.**
+
+```bash
+git clone https://github.com/wombat404/winhole.git
+cd winhole
+./build.sh
+```
+
+`build.sh` publishes the `.NET` tool with `dotnet publish` (single-file,
+self-contained, `win-x64`), compiles `fbanim` statically, generates the
+animation frames, packs the initramfs, and builds a hybrid BIOS/UEFI ISO
+with `grub-mkrescue`. The final ISO lands at `/home/<you>/recovery.iso`.
+
+Rebuilds and the QEMU install+restore test:
+
+```bash
+./rebuild.sh           # rebuild everything
+./rebuild.sh --test    # also run the self-test in a QEMU window
+```
 
 ### On Windows (through WSL)
 
-1. Install WSL and a Debian-based distro:
+The build is Linux-only. On Windows you run it inside WSL, which gives you a
+real Linux where the exact same instructions apply.
+
+1. Install WSL and a Debian distro from PowerShell:
 
    ```powershell
    wsl --install -d Debian
    ```
 
-2. Open the WSL shell. Install the Linux build dependencies as shown above.
+2. Reboot if WSL asks for it, then open the Debian shell.
 
-3. Install .NET on Windows if you want `build.sh` to publish the tool for
-   you. The build calls `C:\Program Files\dotnet\dotnet.exe` through
-   `/mnt/c/Program Files/dotnet/dotnet.exe`.
-
-4. Clone and build:
-
-   ```bash
-   git clone https://github.com/<your-user>/winhole.git
-   cd winhole
-   ./build.sh
-   ```
+3. Follow the Linux instructions above (toolchain, .NET SDK, clone, build).
+   Install everything inside WSL. Do not call Windows' `dotnet.exe`; keep
+   the whole build on the Linux side.
 
 The ISO ends up at `/home/<you>/recovery.iso` inside WSL. From Windows you
 can reach it under `\\wsl.localhost\Debian\home\<you>\recovery.iso` in
-Explorer.
+Explorer, or run `flash-stick.sh` from inside WSL to flash it straight to a
+USB stick (it talks to the host via PowerShell for the UAC-elevated raw
+write).
 
 ---
 
@@ -145,16 +178,27 @@ The QEMU window closes on its own when init reboots.
 
 ## Flashing the stick
 
-With the stick plugged into your Windows host (not re-attached to WSL):
-
 ```bash
 ./flash-stick.sh
 ```
 
-The script asks Windows for a list of USB disks, lets you pick one, then
-starts an elevated PowerShell window that writes the ISO directly to
-`\\.\PhysicalDriveN`. Confirm the UAC prompt. The script shows progress and
-takes the disk offline when it is done.
+The script auto-detects whether it is running on native Linux or inside WSL
+and picks the right method.
+
+### On Linux
+
+The stick must be plugged in and visible as a USB block device. The script
+enumerates USB disks with `lsblk`, asks you to pick one, confirms with
+`FLASH`, unmounts any mounted partitions, then writes the ISO with
+`sudo dd`. You will be prompted for your sudo password.
+
+### Inside WSL
+
+Plug the stick into the Windows host (do **not** re-attach it to WSL via
+`usbipd`). The script asks Windows for the list of USB disks via
+PowerShell, launches an elevated PowerShell window that writes the ISO
+directly to `\\.\PhysicalDriveN`, and takes the disk offline when it is
+done. Confirm the UAC prompt when it appears.
 
 ---
 

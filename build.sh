@@ -24,18 +24,17 @@ echo ">> kernel: $KVER"
 # build PasswordRecovery.exe from assets/src (portable, single-file, self-contained)
 if [ "$DO_EXE" = 1 ]; then
     echo ">> publishing PasswordRecovery.exe from assets/src (portable, self-contained)..."
-    DOTNET="/mnt/c/Program Files/dotnet/dotnet.exe"
-    [ -x "$DOTNET" ] || { echo "!! dotnet.exe not found: $DOTNET"; exit 1; }
     PROJECT="$HERE/assets/src/PRH/PRH.csproj"
     OUTDIR="$HERE/assets/bin"
     [ -f "$PROJECT" ] || { echo "!! PRH.csproj not found: $PROJECT"; exit 1; }
-    PROJECT_WIN="$(wslpath -w "$PROJECT")"
-    OUTDIR_WIN="$(wslpath -w "$OUTDIR")"
+    command -v dotnet >/dev/null 2>&1 || { echo "!! dotnet not found on PATH; install the .NET SDK (see README)"; exit 1; }
+    echo "   using dotnet: $(command -v dotnet)"
+
     # clear old publish artifacts
     find "$OUTDIR" -mindepth 1 -maxdepth 1 ! -name '.*' -exec rm -rf {} +
-    "$DOTNET" publish "$PROJECT_WIN" \
+    dotnet publish "$PROJECT" \
         -c Release \
-        -o "$OUTDIR_WIN" \
+        -o "$OUTDIR" \
         --nologo -v minimal
     [ -f "$OUTDIR/PasswordRecovery.exe" ] || { echo "!! publish did not produce PasswordRecovery.exe"; exit 1; }
     # drop pdb, keep only the portable EXE

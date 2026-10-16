@@ -31,10 +31,9 @@ fi
 
 if [ "$DO_EXE" = 1 ] && [ "$DO_CLEAN_EXE" = 1 ]; then
     echo "== PasswordRecovery: dotnet clean + remove bin/obj =="
-    DOTNET="/mnt/c/Program Files/dotnet/dotnet.exe"
     PROJECT="$HERE/assets/src/PRH/PRH.csproj"
-    if [ -x "$DOTNET" ] && [ -f "$PROJECT" ]; then
-        "$DOTNET" clean "$(wslpath -w "$PROJECT")" -c Release --nologo -v minimal || true
+    if command -v dotnet >/dev/null 2>&1 && [ -f "$PROJECT" ]; then
+        dotnet clean "$PROJECT" -c Release --nologo -v minimal || true
     fi
     rm -rf "$HERE/assets/src/PRH/bin" "$HERE/assets/src/PRH/obj"
 fi
