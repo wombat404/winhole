@@ -214,7 +214,10 @@ done. Confirm the UAC prompt when it appears.
 4. The animation shows `doing the magic stuff` and then `installing`. The
    machine reboots on its own.
 5. Boot Windows normally. On the login screen, click the accessibility icon
-   (bottom right). The password tool opens.
+   (bottom right, the one marked below). The password tool opens.
+
+   ![Accessibility icon on the Windows login screen](docs/images/login-accessibility.png)
+
 6. Pick a user, type a new password (empty = `000000`), click
    **Set Password**.
 7. Log in.
