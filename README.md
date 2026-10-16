@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.png" alt="Winhole" width="320">
+</p>
+
 # Winhole
 
 A bootable USB stick that lets you reset a local Windows user's password on a
