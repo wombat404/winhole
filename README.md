@@ -226,73 +226,39 @@ done. Confirm the UAC prompt when it appears.
 
 ## Turning BitLocker off and on
 
-> Screenshots are placeholders. Replace them with real ones once you have
-> them.
+The full procedure is documented by Microsoft:
+[BitLocker configuration guide (learn.microsoft.com)](https://learn.microsoft.com/en-us/windows/security/operating-system-security/data-protection/bitlocker/configure?tabs=common).
+
+The short version follows. On a Pro or Enterprise edition of Windows the
+UI is reachable through the Control Panel; on Home it is under
+Settings > Privacy & security > Device encryption.
 
 ### Turning BitLocker OFF (before using Winhole)
 
-**Step 1.** Open the Start menu, type `Manage BitLocker`, and press Enter.
+**Step 1.** Open the Start menu, type `bitlocker`, and open **Manage BitLocker**.
 
-![Open Manage BitLocker from Start](docs/images/bitlocker-01-start.png)
-<!-- SCREENSHOT NEEDED: Start menu with "Manage BitLocker" typed in the search box -->
+![Open Manage BitLocker from Start](docs/images/bitlocker-01-search.png)
 
-**Step 2.** The BitLocker Drive Encryption window shows your drives. Find
-the one with the Windows logo (usually `C:`) and click **Turn off
-BitLocker**.
+**Step 2.** In the BitLocker Drive Encryption window, find the operating
+system drive (usually `C:`) and click **Turn off BitLocker**.
 
-![Click Turn off BitLocker next to C:](docs/images/bitlocker-02-turn-off.png)
-<!-- SCREENSHOT NEEDED: BitLocker control panel with "Turn off BitLocker" link visible next to the system drive -->
+![Click Turn off BitLocker next to C:](docs/images/bitlocker-02-panel.png)
 
-**Step 3.** Confirm in the dialog. Windows now decrypts the drive. This
-takes a while (anywhere from minutes to hours depending on drive size and
-amount of data).
+**Step 3.** Confirm, then wait until the progress dialog finishes.
+Decryption can take anywhere from minutes to hours depending on drive size
+and amount of data. Only shut down and boot the Winhole stick once the
+drive status reads **BitLocker off**.
 
-![Confirm turning BitLocker off](docs/images/bitlocker-03-confirm-off.png)
-<!-- SCREENSHOT NEEDED: Confirmation dialog "Are you sure you want to turn off BitLocker?" -->
-
-**Step 4.** Wait until the status says **BitLocker off** before you shut
-down and boot the stick.
-
-![Wait for decryption to finish](docs/images/bitlocker-04-off-status.png)
-<!-- SCREENSHOT NEEDED: BitLocker panel showing "BitLocker off" for the system drive -->
+![Decryption progress dialog](docs/images/bitlocker-03-progress.png)
 
 ### Turning BitLocker ON (after you are done)
 
-**Step 1.** Open **Manage BitLocker** again from the Start menu.
-
-![Open Manage BitLocker from Start](docs/images/bitlocker-05-start-on.png)
-<!-- SCREENSHOT NEEDED: Start menu with "Manage BitLocker" typed again -->
-
-**Step 2.** Next to the system drive, click **Turn on BitLocker**.
-
-![Click Turn on BitLocker](docs/images/bitlocker-06-turn-on.png)
-<!-- SCREENSHOT NEEDED: BitLocker panel with "Turn on BitLocker" link visible -->
-
-**Step 3.** Choose how to back up your recovery key. **Save it somewhere you
-can get to without this computer** (Microsoft account, a USB stick, a
-printed copy). Losing the recovery key means losing the drive.
-
-![Choose where to back up the recovery key](docs/images/bitlocker-07-recovery-key.png)
-<!-- SCREENSHOT NEEDED: "How do you want to back up your recovery key?" dialog -->
-
-**Step 4.** Pick **Encrypt used disk space only** for a faster first-time
-encryption on an SSD, or **Encrypt entire drive** for a drive that was used
-before.
-
-![Choose encryption scope](docs/images/bitlocker-08-encrypt-scope.png)
-<!-- SCREENSHOT NEEDED: "Choose how much of your drive to encrypt" dialog -->
-
-**Step 5.** Pick **New encryption mode** (XTS-AES) for a fixed drive on this
-PC.
-
-![Choose encryption mode](docs/images/bitlocker-09-encrypt-mode.png)
-<!-- SCREENSHOT NEEDED: "Choose which encryption mode to use" dialog -->
-
-**Step 6.** Run the BitLocker system check and reboot. Once the drive is
-being encrypted in the background you are back to a protected state.
-
-![Run system check and start encryption](docs/images/bitlocker-10-system-check.png)
-<!-- SCREENSHOT NEEDED: "Are you ready to encrypt this drive?" with the system check option -->
+Open **Manage BitLocker** the same way, click **Turn on BitLocker** on the
+system drive and follow the wizard. Save the recovery key somewhere you
+can reach without this computer (Microsoft account, a separate USB stick,
+or a printed copy) - losing the recovery key means losing the drive. See
+the Microsoft guide linked above for the recommended choices on encryption
+scope and mode.
 
 ---
 
